@@ -1,0 +1,3 @@
+#!/bin/bash
+TMPFILE=`mktemp -t transmission.XXXXXXXXXX`
+echo "Transmission done!\nfinished file is \"$TR_TORRENT_DIR/$TR_TORRENT_NAME\" on $TR_TIME_LOCALTIME" > $TMPFILE
