@@ -175,7 +175,7 @@ class Torrent:
 		if retVal and (hash or id):
 			retVal = retVal[0]
 		
-		return retVal if retVal else None
+		return retVal if retVal else []
 	
 	@Transmission.auth
 	@Transmission.arguments(fields=["error", "errorString", "eta", "id", "isFinished", "leftUntilDone", "name", "rateDownload", "sizeWhenDone", "status", "hashString", "magnetLink", "totalSize", "percentDone", "downloadDir", "files"])

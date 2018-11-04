@@ -45,8 +45,8 @@ def summVolumeSize(target=None):
 
 def summLeftSize(target=None):
 	vs, ts = summVolumeSize(target), summTorrentSize(target)
-	leftSize = {i:(v, v-ts[i]) if i in ts else (v, 0) for i,v in vs.items()}
-
+	leftSize = {i:(v,0) if i=="/mnt/torrent-temp" else (v, v-ts[i]) if i in ts else (v, v) for i,v in vs.items()}
+# 	leftSize["/mnt/torrent-temp"] = (leftSize["/mnt/torrent-temp"][0], leftSize["/mnt/torrent-temp"][0])
 	return leftSize[target] if target else leftSize
 
 def allocateNewVolume(size):
@@ -66,7 +66,6 @@ def allocateNewVolume(size):
 	
 	return path
 
-# move To not work
 def newTorrent(magnet):
 	t = Torrent.add(filename=magnet, download_dir="/mnt/torrent-temp/")
 	t.waitAdd()
@@ -75,11 +74,11 @@ def newTorrent(magnet):
 	x = summLeftSize()
 	volumeSize = x[t.downloadDir]
 	
-	if volumeSize[1] < 0:
+	if volumeSize[1] <= 0:
 		t.stop()
 		moved=False
 		for i,v in x.items():
-			if v < t.gigaSize:
+			if t.gigaSize <= v[1]:
 				moved, path = True, i
 		if not moved:
 			path = allocateNewVolume(t.gigaSize)
@@ -87,6 +86,9 @@ def newTorrent(magnet):
 		t.moveTo(location=path)
 		time.sleep(2)
 		t.start()
+		
+	if 5 < len(Torrent.get()):
+		t.stop()
 
 def done():
 	s3Bucket = "videos.ismin.uk"
@@ -105,6 +107,12 @@ def done():
 	upload(s3Bucket, path, fileList)
 
 	torrent.removeTorrentAndFile()
+	tList = Torrent.get()
+	runningList, stopList = [i for i in tList if i.statusString == "DOWNLOAD"], [i for i in tList if i.statusString == "PAUSED"]
+	if len(runningList)<5:
+		for i in range(0,min(len(stopList), 5-len(runningList))):
+			stopList[i].start()
+			
 	releaseCheck()
 
 def compress(path, name, fileList):
@@ -130,10 +138,13 @@ def upload(bucket, path, fileList):
 	
 def releaseCheck():
 	volumes = summLeftSize()
-	emptyVolumes = [(i, v) for i, v in volumes.items() if v[1] == 0]
+	print(volumes)
+	emptyVolumes = [(i, v) for i, v in volumes.items() if v[1] == v[0]]
 	for i in emptyVolumes:
 		v = Volume.get(uid=i[0][5:])
-		
+		if not v:
+			continue
+			
 		v.umount()
 		v.detach()
 		v.waitDetach()
