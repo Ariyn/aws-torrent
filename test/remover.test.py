@@ -10,7 +10,7 @@ import Remover as rm
 
 class Test(unittest.TestCase):
 	def setUp(self):
-		self.t = Transmission(server="13.124.14.192", port=8080, passwd="pw4transmission")
+		self.t = Transmission(server="", port=8080, passwd="")
 		# x = self.t.list()[4]
 
 		# print(x.name, x.hash, x.downloadDir)

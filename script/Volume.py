@@ -23,7 +23,7 @@ ec2Methods = {i:ec2.__getattribute__(i) for i in [
 		"delete_volume"
 	]}
 class Volume:
-	mountPoint, deviceNames, defaultSize = "/mnt", "fghijklmnopqrstuvwxyz", 10
+	mountPoint, deviceNames, defaultSize = "/mnt", "", 10
 	defaultTags = [
 		{
 			'Key': 'Name',
@@ -40,7 +40,7 @@ class Volume:
 	]
 	randomString = lambda:sample(string.ascii_lowercase+string.digits, 6)
 	availabilityZone, instanceId = "ap-northeast-2c", ""
-	
+
 	def invoke(method):
 		method = ec2Methods[method]
 		def _(f):
@@ -48,12 +48,12 @@ class Volume:
 				return method(**f(*args, **kwargs))
 			return __
 		return _
-	
+
 	def waiter(name, delay=5, maxAttempts=6):
 		waiter = ec2.get_waiter(name)
 		def _(f):
 			def __(*args, **kwargs):
-				kwargs = f(*args, **kwargs) 
+				kwargs = f(*args, **kwargs)
 				kwargs["WaiterConfig"] = {
 					"Delay":delay,
 					"MaxAttempts":maxAttempts
@@ -61,7 +61,7 @@ class Volume:
 				return waiter.wait(**kwargs)
 			return __
 		return _
-	
+
 	def __init__(self, uid=None, **kwargs):
 		self.volumeId, self.size = "", 0
 		self.tags, self.hash, self.uid = {}, "", ""
@@ -69,31 +69,31 @@ class Volume:
 		self.attachment, self.state = {}, "Unallocated"
 		self.createdTime = ""
 		kwargs["uid"] = uid
-		
+
 		self.__allocInfo__(kwargs)
 		self.__mountInfo__()
-	
+
 	def __mountInfo__(self):
 		mounts = subprocess.check_output(["mount"]).decode("utf-8").split("\n")
 		mounts = [i for i in mounts if self.deviceId and i.startswith(self.deviceId)]
 		if mounts:
 			self.mountPath = mounts[0].replace(self.deviceId+" on ", "").split(" ")[0]
-			
-			
+
+
 	def __allocInfo__(self, kwargs):
 		if "VolumeId" in kwargs:
 			self.volumeId = kwargs["VolumeId"]
-		
+
 		if "Tags" in kwargs:
 			self.tags = {i["Key"]:i["Value"] for i in kwargs["Tags"]}
 			self.hash, self.uid = self.tags["Hash"], self.tags["Hash"][:6]
-		
+
 		if "Size" in kwargs:
 			self.size = kwargs["Size"]
-			
+
 		if "Hash" in kwargs:
 			self.hash, self.uid = kwargs["Hash"], kwargs["Hash"][:6]
-			
+
 		if "Attachments" in kwargs:
 			attach = {}
 			for i in kwargs["Attachments"]:
@@ -102,15 +102,15 @@ class Volume:
 				attach[i["InstanceId"]].append(i)
 				self.deviceId = i["Device"]
 				self.instanceId = i["InstanceId"]
-			
+
 			self.attachment = attach
-		
+
 		if "State" in kwargs:
 			self.state = kwargs["State"]
-			
+
 		if "CreatedTime" in kwargs:
 			self.createdTime = kwargs["CreatedTime"]
-		
+
 	@waiter("volume_available", delay=5, maxAttempts=6)
 	def waitCreate(self):
 		return {
@@ -121,13 +121,13 @@ class Volume:
 		return {
 			"VolumeIds":[self.volumeId]
 		}
-	 
+
 	@waiter("volume_deleted", delay=5, maxAttempts=6)
 	def waitDelete(self):
 		return {
 			"VolumeIds":[self.volumeId]
 		}
-	
+
 	@waiter("volume_in_use", delay=5, maxAttempts=6)
 	def waitAttach(self):
 		return {
@@ -137,32 +137,32 @@ class Volume:
 				"Values":["attached"]
 			}]
 		}
-	
+
 	@invoke("delete_volume")
 	def delete(self):
 		kwargs = {
 			"VolumeId":self.volumeId
 		}
 		return kwargs
-	
+
 	@invoke("attach_volume")
 	def attach(self, instanceId, deviceId=None):
-		self.instanceId = instanceId		
+		self.instanceId = instanceId
 		if not deviceId:
 			deviceId = Volume.getFreeDeviceName(instanceId)
-			
+
 		self.deviceId = deviceId
-		
+
 		kwargs = {
 			"Device":deviceId,
 			"InstanceId":instanceId,
 			"VolumeId":self.volumeId
 		}
 		return kwargs
-	
+
 	def isAttached(self):
 		return self.attachment != {}
-	
+
 	@invoke("detach_volume")
 	def detach(self):
 		kwargs = {
@@ -176,7 +176,7 @@ class Volume:
 	@staticmethod
 	def staticInvoke(method, kwargs):
 		return ec2Methods[method](**kwargs)
-	
+
 	@staticmethod
 	def get(uid=None, volumeId=None, volumeFilter=[]):
 		kwargs = {
@@ -196,12 +196,12 @@ class Volume:
 			kwargs["Filters"] = kwargs["Filters"]+volumeFilter
 
 		retVal = [Volume(**i) for i in Volume.staticInvoke("describe_volumes", kwargs)["Volumes"]]
-		
+
 		if retVal and uid:
 			retVal = retVal[0]
-			
+
 		return retVal if retVal else []
-	
+
 	@staticmethod
 	def getFreeDeviceName(instanceId=instanceId):
 		import functools
@@ -214,7 +214,7 @@ class Volume:
 		retVal = map(lambda x:x[-1], functools.reduce(lambda x,y :x+y, retVal))
 		retVal = sample(set(Volume.deviceNames) - set(retVal), 1)[0]
 		return "/dev/xvd"+retVal
-	
+
 	@staticmethod
 	def create(size, hash=None, tags=[]):
 		if not hash:
@@ -222,8 +222,8 @@ class Volume:
 			shuffle(rs)
 			sha.update("".join(rs).encode("utf-8"))
 			hash = sha.hexdigest()
-		
-		
+
+
 		tags = [{"Key":i[0],"Value":i[1]} for i in tags]
 		uid = hash[:6]
 		kwargs = {
@@ -244,10 +244,10 @@ class Volume:
 				}]+tags
 			}]
 		}
-		
+
 		retVal = Volume(**Volume.staticInvoke("create_volume", kwargs))
 		return retVal
-	
+
 	def popFstab(self):
 		if self.deviceId != "":
 			fstab = open("/etc/fstab","r").read().split("\n")
@@ -264,7 +264,7 @@ class Volume:
 		deviceName = self.deviceId
 		mountPath = "%s/%s"%(self.mountPoint, self.uid)
 		x = subprocess.check_output(["sudo", "file", "-s", deviceName]).decode("utf-8")
-		
+
 		if ("%s: data"%deviceName) in x:
 			p = subprocess.Popen(("sudo mkfs -t ext4 %s"%deviceName).split(" "))
 			p.wait()
@@ -272,13 +272,13 @@ class Volume:
 		p = subprocess.Popen(("sudo mkdir %s"%mountPath).split(" "))
 		p.wait()
 
-		
+
 		p = subprocess.Popen(("sudo mount -t ext4 %s %s"%(deviceName, mountPath)).split(" "))
 		p.wait()
-		
+
 		subprocess.Popen(("sudo chmod 777 %s"%mountPath).split(" "))
 		p.wait()
-		
+
 		self.mountPath = mountPath
 		self.appendFstab()
 
@@ -291,12 +291,12 @@ class Volume:
 		subprocess.check_output(("sudo umount %s"%mountPath).split(" "))
 # 		time.sleep(1)
 		self.popFstab()
-		
+
 	def isMounted(self):
 		return self.mountPath != ""
 
-	
-	
+
+
 # default form
 # {
 # 	'Attachments': [

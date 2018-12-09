@@ -10,7 +10,7 @@ from datetime import datetime
 from Volume import Volume
 from Torrent import Torrent
 
-instanceId = "i-0d95f7b47ba724311"
+instanceId = "i-"
 defaultSIZE = 10
 datas = {
 	"name":"TR_TORRENT_NAME",
@@ -25,7 +25,7 @@ maxSize = 400*1024*1024
 
 def summTorrentSize(target=None):
 	torrentSize = {}
-	
+
 	for i in Torrent.get():
 		if i.downloadDir not in torrentSize:
 			torrentSize[i.downloadDir] = []
@@ -33,7 +33,7 @@ def summTorrentSize(target=None):
 
 	torrentSize = {i:sum([j.gigaSize for j in v]) for i,v in torrentSize.items() if (target and i == target) or not target}
 	return torrentSize
-	
+
 def summVolumeSize(target=None):
 	volumes = Volume.get(volumeFilter = [{
 		"Name":"attachment.instance-id",
@@ -63,17 +63,17 @@ def allocateNewVolume(size):
 	v.attach(instanceId)
 	v.waitAttach()
 	path = v.mount()
-	
+
 	return path
 
 def newTorrent(magnet):
 	t = Torrent.add(filename=magnet, download_dir="/mnt/torrent-temp/")
 	t.waitAdd()
 	print(t)
-	
+
 	x = summLeftSize()
 	volumeSize = x[t.downloadDir]
-	
+
 	if volumeSize[1] <= 0:
 		t.stop()
 		moved=False
@@ -82,11 +82,11 @@ def newTorrent(magnet):
 				moved, path = True, i
 		if not moved:
 			path = allocateNewVolume(t.gigaSize)
-			
+
 		t.moveTo(location=path)
 		time.sleep(2)
 		t.start()
-		
+
 	if 5 < len(Torrent.get()):
 		t.stop()
 
@@ -112,7 +112,7 @@ def done():
 	if len(runningList)<5:
 		for i in range(0,min(len(stopList), 5-len(runningList))):
 			stopList[i].start()
-			
+
 	releaseCheck()
 
 def compress(path, name, fileList):
@@ -135,7 +135,7 @@ def upload(bucket, path, fileList):
 	for i in fileList:
 		print("uploading %s"%i)
 		s3.upload_file(path+"/"+i, bucket, i)
-	
+
 def releaseCheck():
 	volumes = summLeftSize()
 	print(volumes)
@@ -144,12 +144,12 @@ def releaseCheck():
 		v = Volume.get(uid=i[0][5:])
 		if not v:
 			continue
-			
+
 		v.umount()
 		v.detach()
 		v.waitDetach()
 		v.delete()
 # 		v.waitDelete()
-	
+
 if __name__ == "__main__":
 	done()
